@@ -6,7 +6,27 @@ CLOUDFLARE_ZONE_ID="replace"
 DOMAIN="static.example.com"
 BASE_IP="1.2.3"
 DRY_RUN=0
+TTL=86400 # 1 day
 SLEEP=1
+
+# Check if the API token has the required access
+ZONE_DETAILS_RESPONSE=$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones/$ZONE_ID" \
+     -H "Authorization: Bearer $TOKEN" \
+     -H "Content-Type: application/json")
+
+# Extract success status from the response
+SUCCESS_STATUS=$(echo $ZONE_DETAILS_RESPONSE | jq -r '.success')
+
+if [[ "$SUCCESS_STATUS" != "true" ]]; then
+    echo "Error: The provided API token doesn't have the required access or is invalid."
+    exit 1
+fi
+
+# Ensure the BASE_IP is in the correct IPv4 format for the first three octets.
+if ! [[ "$BASE_IP" =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
+    echo "Error: Invalid BASE_IP format. It should only include the first three octets of an IPv4 address (e.g., 192.168.1)."
+    exit 1
+fi
 
 # Check for --dry-run argument
 if [[ $1 == "--dry-run" ]]; then
@@ -30,7 +50,7 @@ for i in {0..255}; do
       RESPONSE=$(curl -s -X POST "https://api.cloudflare.com/client/v4/zones/${CLOUDFLARE_ZONE_ID}/dns_records" \
        -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
        -H "Content-Type: application/json" \
-       --data '{"type":"A","name":"'"${RDNS}"'","content":"'"${IP}"'","ttl":86400,"proxied":false}')
+       --data '{"type":"A","name":"'"${RDNS}"'","content":"'"${IP}"'","ttl":'${TTL}',"proxied":false}')
 
       # Check if the operation was successful based on the response
       SUCCESS=$(echo $RESPONSE | jq -r '.success')
